@@ -1,14 +1,16 @@
 #########################
 # Cloud VPN
+# 段階的にリソースを作成中
 #########################
 
 # ----------------------
 # Cloud VPN Gateway
+# ステップ3: GCP側のVPN GatewayとRouterを作成
 # ----------------------
 resource "google_compute_ha_vpn_gateway" "vpn_gw" {
-  region  = local.gcp_network_config.region
+  region  = local.gcp_producer_network_config.region
   name    = "${local.env}-${local.project}-ha-vpn-gw"
-  network = google_compute_network.vpc.id
+  network = google_compute_network.producer_vpc.id
 }
 
 # ----------------------
@@ -16,8 +18,8 @@ resource "google_compute_ha_vpn_gateway" "vpn_gw" {
 # ----------------------
 resource "google_compute_router" "vpn_router" {
   name    = "${local.env}-${local.project}-ha-vpn-router"
-  region  = local.gcp_network_config.region
-  network = google_compute_network.vpc.name
+  region  = local.gcp_producer_network_config.region
+  network = google_compute_network.producer_vpc.name
   bgp {
     asn = local.gcp_vpn_config.asn
   }
@@ -25,6 +27,7 @@ resource "google_compute_router" "vpn_router" {
 
 # ----------------------
 # Peer VPN Gateway
+# ステップ6: GCP側のExternal VPN Gatewayを作成（AWS側のVPN接続の情報を参照）
 # ----------------------
 resource "google_compute_external_vpn_gateway" "external_vpn_gw" {
   name            = "${local.env}-${local.project}-external-vpn-gw"
@@ -46,16 +49,23 @@ resource "google_compute_external_vpn_gateway" "external_vpn_gw" {
     id         = 3
     ip_address = aws_vpn_connection.vpn_connection_02.tunnel2_address
   }
+
+  depends_on = [
+    aws_vpn_connection.vpn_connection_01,
+    aws_vpn_connection.vpn_connection_02
+  ]
 }
 
 # ----------------------
 # VPN Tunnel
+# ステップ7: GCP側のVPN Tunnel、Router Interface、Router Peerを段階的に作成
 # ----------------------
 
-// VPN Tunnel 1
+# VPN Tunnel 1
+# ステップ7-1: tunnel1とその関連リソースを作成
 resource "google_compute_vpn_tunnel" "tunnel1" {
   name                            = "${local.env}-${local.project}-vpn-tunnel1"
-  region                          = local.gcp_network_config.region
+  region                          = local.gcp_producer_network_config.region
   vpn_gateway                     = google_compute_ha_vpn_gateway.vpn_gw.id
   peer_external_gateway           = google_compute_external_vpn_gateway.external_vpn_gw.id
   peer_external_gateway_interface = 0
@@ -82,10 +92,11 @@ resource "google_compute_router_peer" "tunnel1_bgp" {
   interface       = google_compute_router_interface.tunnel1_interface.name
 }
 
-// VPN Tunnel 2
+# VPN Tunnel 2
+# ステップ7-2: tunnel2とその関連リソースを作成
 resource "google_compute_vpn_tunnel" "tunnel2" {
   name                            = "${local.env}-${local.project}-vpn-tunnel2"
-  region                          = local.gcp_network_config.region
+  region                          = local.gcp_producer_network_config.region
   vpn_gateway                     = google_compute_ha_vpn_gateway.vpn_gw.id
   peer_external_gateway           = google_compute_external_vpn_gateway.external_vpn_gw.id
   peer_external_gateway_interface = 1
@@ -112,10 +123,11 @@ resource "google_compute_router_peer" "tunnel2_bgp" {
   interface       = google_compute_router_interface.tunnel2_interface.name
 }
 
-// VPN Tunnel 3
+# VPN Tunnel 3
+# ステップ7-3: tunnel3とその関連リソースを作成
 resource "google_compute_vpn_tunnel" "tunnel3" {
   name                            = "${local.env}-${local.project}-vpn-tunnel3"
-  region                          = local.gcp_network_config.region
+  region                          = local.gcp_producer_network_config.region
   vpn_gateway                     = google_compute_ha_vpn_gateway.vpn_gw.id
   peer_external_gateway           = google_compute_external_vpn_gateway.external_vpn_gw.id
   peer_external_gateway_interface = 2
@@ -142,10 +154,11 @@ resource "google_compute_router_peer" "tunnel3_bgp" {
   interface       = google_compute_router_interface.tunnel3_interface.name
 }
 
-// VPN Tunnel 4
+# VPN Tunnel 4
+# ステップ7-4: tunnel4とその関連リソースを作成
 resource "google_compute_vpn_tunnel" "tunnel4" {
   name                            = "${local.env}-${local.project}-vpn-tunnel4"
-  region                          = local.gcp_network_config.region
+  region                          = local.gcp_producer_network_config.region
   vpn_gateway                     = google_compute_ha_vpn_gateway.vpn_gw.id
   peer_external_gateway           = google_compute_external_vpn_gateway.external_vpn_gw.id
   peer_external_gateway_interface = 3

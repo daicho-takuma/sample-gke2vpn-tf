@@ -1,0 +1,9 @@
+# GCPプロジェクトIDを設定してください
+# このファイルを terraform.tfvars にコピーして、実際のプロジェクトIDを設定してください
+#
+# コピー方法:
+#   cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+#
+# 注意: terraform.tfvars は .gitignore に追加することを推奨します
+
+project_id = "YOUR_PROJECT_ID"

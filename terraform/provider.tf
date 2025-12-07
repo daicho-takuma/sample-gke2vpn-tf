@@ -9,6 +9,6 @@ provider "aws" {
 }
 
 provider "google" {
-  project = var.project_id
+  project = local.project_id
   region  = "asia-northeast1"
 }

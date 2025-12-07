@@ -11,7 +11,7 @@ resource "aws_instance" "vms" {
   key_name                    = each.value.key_name
   vpc_security_group_ids      = [aws_security_group.web.id]
   subnet_id                   = can(regex(".*public.*", each.value.subnet_name)) ? aws_subnet.public[each.value.subnet_name].id : aws_subnet.private[each.value.subnet_name].id
-  associate_public_ip_address = true
+  associate_public_ip_address = can(regex(".*public.*", each.value.subnet_name))
   private_ip                  = each.value.private_ip
   iam_instance_profile        = aws_iam_instance_profile.vms[each.key].id
   tags = {
@@ -111,9 +111,9 @@ resource "aws_security_group_rule" "web_ingress_http_all" {
   from_port         = 80
   to_port           = 80
   protocol          = "tcp"
-  cidr_blocks       = [local.gcp_network_config.proxy_subnet["${local.env}-${local.project}-gcp-ilb-proxy-subnet-ane1"].cidr]
+  cidr_blocks       = [local.gcp_producer_network_config.proxy_subnet["${local.env}-${local.project}-gcp-producer-ilb-proxy-subnet"].cidr]
   security_group_id = aws_security_group.web.id
-  description       = "Allow HTTPS from ALL"
+  description       = "Allow HTTP from GCP Producer VPC"
 }
 
 resource "aws_security_group_rule" "web_ingress_icmp_all" {

@@ -112,12 +112,43 @@ resource "aws_subnet" "private" {
   }
 }
 
+#########################
+# NAT Gateway
+#########################
+
+# Elastic IP for NAT Gateway
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags = {
+    Name = "${local.env}-${local.project}-nat-eip"
+  }
+  depends_on = [aws_internet_gateway.igw]
+}
+
+# NAT Gateway (placed in public subnet)
+resource "aws_nat_gateway" "nat" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[keys(local.aws_network_config.public_subnet)[0]].id
+
+  tags = {
+    Name = "${local.env}-${local.project}-nat-gw"
+  }
+  depends_on = [aws_internet_gateway.igw]
+}
+
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.vpc.id
   tags = {
     Name = "${local.env}-${local.project}-private-route"
   }
   #propagating_vgws = []
+}
+
+# Route to NAT Gateway for private subnet
+resource "aws_route" "private_nat" {
+  route_table_id         = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.nat.id
 }
 
 resource "aws_route_table_association" "private" {
