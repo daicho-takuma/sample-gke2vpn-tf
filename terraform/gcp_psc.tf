@@ -28,7 +28,7 @@ resource "google_compute_forwarding_rule" "psc_endpoint" {
   subnetwork            = google_compute_subnetwork.consumer_subnet["${local.env}-${local.project}-gcp-consumer-psc-endpoint-subnet"].id
   load_balancing_scheme = ""
   target                = google_compute_service_attachment.psc_service_attachment.self_link
-  ip_address            = google_compute_address.psc_endpoint_ip.id
+  ip_address            = google_compute_address.psc_endpoint_ip.address
 }
 
 # ----------------------
