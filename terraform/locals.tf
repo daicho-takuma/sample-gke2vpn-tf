@@ -2,8 +2,8 @@
 # Basic Configuration
 #########################
 locals {
-  env        = "test"
-  project    = "gke2vpn"
+  env        = var.environment
+  project    = var.project_name
   project_id = var.project_id
 }
 
@@ -14,7 +14,7 @@ locals {
 # AWS Network Config
 locals {
   aws_network_config = {
-    region   = "ap-northeast-1"
+    region   = var.aws_region
     vpc_name = "${local.env}-${local.project}-aws-vpc"
     vpc_cidr = "10.0.0.0/16"
     public_subnet = {
@@ -66,18 +66,18 @@ locals {
 #########################
 
 # GCP Consumer Network Config
-# Consumer VPC: GKEクラスターとPSCエンドポイント用
+# Consumer VPC: For GKE cluster and PSC endpoint
 locals {
   gcp_consumer_network_config = {
-    region   = "asia-northeast1"
+    region   = var.gcp_region
     vpc_name = "${local.env}-${local.project}-gcp-consumer-vpc"
     general_subnet = {
       "${local.env}-${local.project}-gcp-consumer-gke-subnet" = {
-        region = "asia-northeast1"
+        region = var.gcp_region
         cidr   = "10.0.10.0/24"
       }
       "${local.env}-${local.project}-gcp-consumer-psc-endpoint-subnet" = {
-        region = "asia-northeast1"
+        region = var.gcp_region
         cidr   = "10.0.20.0/24"
       }
     }
@@ -85,24 +85,24 @@ locals {
 }
 
 # GCP Producer Network Config
-# Producer VPC: ILB、Service Attachment、VPN用
+# Producer VPC: For ILB, Service Attachment, and VPN
 locals {
   gcp_producer_network_config = {
-    region   = "asia-northeast1"
+    region   = var.gcp_region
     vpc_name = "${local.env}-${local.project}-gcp-producer-vpc"
     general_subnet = {
       "${local.env}-${local.project}-gcp-producer-psc-nat-subnet" = {
-        region = "asia-northeast1"
+        region = var.gcp_region
         cidr   = "10.10.10.0/24"
       }
       "${local.env}-${local.project}-gcp-producer-ilb-frontend-subnet" = {
-        region = "asia-northeast1"
+        region = var.gcp_region
         cidr   = "10.10.20.0/24"
       }
     }
     proxy_subnet = {
       "${local.env}-${local.project}-gcp-producer-ilb-proxy-subnet" = {
-        region = "asia-northeast1"
+        region = var.gcp_region
         cidr   = "10.10.30.0/24"
       }
     }
@@ -113,7 +113,7 @@ locals {
 locals {
   gcp_gke_config = {
     cluster_name   = "${local.env}-${local.project}-gke-cluster"
-    location       = "asia-northeast1"
+    location       = var.gcp_region
     node_pool_name = "${local.env}-${local.project}-gke-node-pool"
     machine_type   = "e2-medium"
     min_node_count = 1

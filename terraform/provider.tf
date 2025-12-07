@@ -1,5 +1,5 @@
 provider "aws" {
-  region = "ap-northeast-1"
+  region = var.aws_region
   default_tags {
     tags = {
       Environment = local.env
@@ -10,5 +10,4 @@ provider "aws" {
 
 provider "google" {
   project = local.project_id
-  region  = "asia-northeast1"
-}
+  region  = var.gcp_region

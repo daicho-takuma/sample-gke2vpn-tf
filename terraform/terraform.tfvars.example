@@ -1,9 +1,15 @@
-# GCPプロジェクトIDを設定してください
-# このファイルを terraform.tfvars にコピーして、実際のプロジェクトIDを設定してください
+# GCP Project ID
+# Copy this file to terraform.tfvars and set your actual project ID
 #
-# コピー方法:
+# Copy command:
 #   cp terraform/terraform.tfvars.example terraform/terraform.tfvars
 #
-# 注意: terraform.tfvars は .gitignore に追加することを推奨します
+# Note: terraform.tfvars is already in .gitignore
 
 project_id = "YOUR_PROJECT_ID"
+
+# Optional: Override default values
+# environment  = "test"
+# project_name = "gke2vpn"
+# aws_region   = "ap-northeast-1"
+# gcp_region   = "asia-northeast1"
