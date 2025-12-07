@@ -11,3 +11,4 @@ provider "aws" {
 provider "google" {
   project = local.project_id
   region  = var.gcp_region
+}
