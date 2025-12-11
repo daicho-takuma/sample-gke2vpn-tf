@@ -114,32 +114,100 @@ echo "=========================================="
 echo "PSC Endpoint IP: ${PSC_ENDPOINT_IP}"
 echo ""
 
-# Send HTTP request
+# Get Pod IP for display
+POD_IP=$(kubectl get pod ${POD_NAME} -o jsonpath='{.status.podIP}' 2>/dev/null || echo "N/A")
+
+# Send HTTP request and capture output
 echo "Sending HTTP request..."
-TEST_RESULT=0
-kubectl exec ${POD_NAME} -- curl -v -m 10 http://${PSC_ENDPOINT_IP} || TEST_RESULT=$?
+echo ""
+
+# Use a temporary file to capture curl output
+TEMP_OUTPUT=$(mktemp)
+kubectl exec ${POD_NAME} -- curl -s -w "\nHTTP_CODE:%{http_code}\nTIME_TOTAL:%{time_total}\n" -m 10 http://${PSC_ENDPOINT_IP} > "$TEMP_OUTPUT" 2>&1
+TEST_RESULT=$?
+
+# Extract response body and HTTP code
+HTTP_CODE=$(grep "^HTTP_CODE:" "$TEMP_OUTPUT" | cut -d: -f2 | tr -d '\r')
+TIME_TOTAL=$(grep "^TIME_TOTAL:" "$TEMP_OUTPUT" | cut -d: -f2 | tr -d '\r')
+RESPONSE_BODY=$(grep -v "^HTTP_CODE:" "$TEMP_OUTPUT" | grep -v "^TIME_TOTAL:" | grep -v "^$" | tr -d '\r')
+
+# Clean up temp file
+rm -f "$TEMP_OUTPUT"
 
 echo ""
 echo "=========================================="
 echo "Connection Test Result"
 echo "=========================================="
-
-# Delete Pod (regardless of success or failure)
 echo ""
-echo "Deleting test Pod..."
-kubectl delete pod ${POD_NAME} --ignore-not-found=true
-echo "Pod deleted"
 
-# Display test result
-if [ $TEST_RESULT -eq 0 ]; then
-  echo "✅ Connection successful!"
-  exit 0
+# Display connection information
+echo "📋 Connection Information:"
+echo "  Source: GKE Pod (IP: ${POD_IP})"
+echo "  Destination: PSC Endpoint (IP: ${PSC_ENDPOINT_IP})"
+echo "  Target: AWS EC2 Instance (via VPN)"
+echo ""
+
+# Display response details
+if [ $TEST_RESULT -eq 0 ] && [ -n "$HTTP_CODE" ]; then
+  echo "✅ Connection Status: SUCCESS"
+  echo ""
+  echo "📊 Response Details:"
+  echo "  HTTP Status Code: ${HTTP_CODE}"
+  if [ -n "$TIME_TOTAL" ]; then
+    echo "  Response Time: ${TIME_TOTAL}s"
+  fi
+  echo ""
+  echo "📝 Response Body:"
+  echo "  ┌─────────────────────────────────────────────────────────┐"
+  if [ -n "$RESPONSE_BODY" ]; then
+    echo "$RESPONSE_BODY" | sed 's/^/  │ /'
+  else
+    echo "  │ (Empty response)"
+  fi
+  echo "  └─────────────────────────────────────────────────────────┘"
+  echo ""
+  echo "🔗 Connection Path:"
+  echo "  GKE Pod (${POD_IP})"
+  echo "    ↓"
+  echo "  PSC Endpoint (${PSC_ENDPOINT_IP})"
+  echo "    ↓"
+  echo "  Service Attachment"
+  echo "    ↓"
+  echo "  Internal Load Balancer (Producer VPC)"
+  echo "    ↓"
+  echo "  VPN Gateway (GCP → AWS)"
+  echo "    ↓"
+  echo "  AWS EC2 Instance ✅"
 else
-  echo "❌ Connection failed"
+  echo "❌ Connection Status: FAILED"
+  echo ""
+  echo "Error Details:"
+  if [ $TEST_RESULT -ne 0 ]; then
+    echo "  curl command failed with exit code: $TEST_RESULT"
+  fi
+  if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" != "200" ]; then
+    echo "  HTTP Status Code: ${HTTP_CODE:-N/A}"
+  fi
   echo ""
   echo "Check the following:"
   echo "1. Verify PSC endpoint status is 'Accepted'"
   echo "2. Verify ILB backend (AWS EC2 instance) is running"
   echo "3. Verify firewall rules are correctly configured"
+  echo "4. Verify VPN connection is established"
+fi
+
+# Delete Pod (regardless of success or failure)
+echo ""
+echo "Cleaning up test Pod..."
+kubectl delete pod ${POD_NAME} --ignore-not-found=true
+echo "Pod deleted"
+echo ""
+
+# Exit with appropriate code
+if [ $TEST_RESULT -eq 0 ] && [ "$HTTP_CODE" = "200" ]; then
+  echo "✅ Test completed successfully!"
+  exit 0
+else
+  echo "❌ Test failed"
   exit 1
 fi
