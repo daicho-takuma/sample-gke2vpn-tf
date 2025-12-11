@@ -67,20 +67,45 @@ locals {
 
 # GCP Consumer Network Config
 # Consumer VPC: For GKE cluster and PSC endpoint
+# IMPORTANT: This VPC intentionally uses the SAME CIDR ranges as AWS VPC to test VPN routing behavior
+# when both sides have overlapping IP address spaces. This is intentional for testing purposes.
 locals {
   gcp_consumer_network_config = {
     region   = var.gcp_region
     vpc_name = "${local.env}-${local.project}-gcp-consumer-vpc"
     general_subnet = {
+      # Primary subnet for GKE nodes (VMs)
+      # This CIDR is used for the node IP addresses (not Pods/Services)
+      # ⚠️ INTENTIONAL OVERLAP: Using SAME CIDR as AWS public subnet to test VPN routing
+      # AWS public subnet: ${local.aws_network_config.public_subnet[keys(local.aws_network_config.public_subnet)[0]].cidr}
       "${local.env}-${local.project}-gcp-consumer-gke-subnet" = {
         region = var.gcp_region
-        cidr   = "10.0.10.0/24"
+        cidr   = local.aws_network_config.public_subnet[keys(local.aws_network_config.public_subnet)[0]].cidr # Same as AWS public subnet: 10.0.10.0/24
       }
+      # ⚠️ INTENTIONAL OVERLAP: Using SAME CIDR as AWS private subnet to test VPN routing
+      # AWS private subnet: ${local.aws_network_config.private_subnet[keys(local.aws_network_config.private_subnet)[0]].cidr}
       "${local.env}-${local.project}-gcp-consumer-psc-endpoint-subnet" = {
         region = var.gcp_region
-        cidr   = "10.0.20.0/24"
+        cidr   = local.aws_network_config.private_subnet[keys(local.aws_network_config.private_subnet)[0]].cidr # Same as AWS private subnet: 10.0.20.0/24
       }
     }
+    # Secondary IP ranges for GKE cluster subnet (defined as secondary_ip_range in the subnet)
+    # These are separate IP ranges used within the same subnet:
+    # - Pods: IP addresses assigned to each Pod container
+    # - Services: IP addresses for Kubernetes Services (ClusterIP)
+    # ⚠️ INTENTIONAL OVERLAP: These ranges are within AWS VPC CIDR (${local.aws_network_config.vpc_cidr})
+    #   to test VPN routing behavior with overlapping IP spaces
+    # Note: These ranges must NOT overlap with:
+    #   - Primary subnet CIDR (10.0.10.0/24 - same as AWS public subnet)
+    #   - PSC endpoint subnet CIDR (10.0.20.0/24 - same as AWS private subnet)
+    #   - Each other (Pod and Service ranges must not overlap)
+    # Pods: /24 provides ~250 IPs (sufficient for testing/validation purposes)
+    # Services: /24 provides ~250 IPs (sufficient for testing/validation purposes)
+    # Both ranges are within AWS VPC (10.0.0.0/16) but do not overlap with:
+    #   - AWS subnets (10.0.10.0/24, 10.0.20.0/24)
+    #   - Each other (Pods and Services ranges are separate)
+    gke_pod_ip_range     = "10.0.100.0/24" # Secondary range: for Pod IPs (10.0.100.0 - 10.0.100.255, within AWS VPC 10.0.0.0/16, sufficient for testing)
+    gke_service_ip_range = "10.0.200.0/24" # Secondary range: for Service IPs (10.0.200.0 - 10.0.200.255, within AWS VPC 10.0.0.0/16, sufficient for testing)
   }
 }
 
@@ -128,4 +153,10 @@ locals {
   gcp_vpn_config = {
     asn = 65000
   }
+}
+
+# GCP Zone Config
+# Derive zone from region (using first zone, typically -a)
+locals {
+  gcp_zone = "${var.gcp_region}-a"
 }

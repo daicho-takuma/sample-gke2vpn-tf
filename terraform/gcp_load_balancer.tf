@@ -75,7 +75,7 @@ resource "google_compute_network_endpoint_group" "neg" {
   name                  = "${local.env}-${local.project}-ilb-neg"
   network               = google_compute_network.producer_vpc.id
   default_port          = "80"
-  zone                  = "asia-northeast1-a"
+  zone                  = local.gcp_zone
   network_endpoint_type = "NON_GCP_PRIVATE_IP_PORT"
 }
 
@@ -84,5 +84,5 @@ resource "google_compute_network_endpoint" "neg" {
   network_endpoint_group = google_compute_network_endpoint_group.neg.name
   port                   = google_compute_network_endpoint_group.neg.default_port
   ip_address             = each.value.private_ip
-  zone                   = "asia-northeast1-a"
+  zone                   = local.gcp_zone
 }
