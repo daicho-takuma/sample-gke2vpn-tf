@@ -98,6 +98,13 @@ spec:
     image: curlimages/curl:latest
     command: ["/bin/sh"]
     args: ["-c", "while true; do sleep 3600; done"]
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
   restartPolicy: Never
 EOF
 
@@ -105,6 +112,11 @@ EOF
 echo ""
 echo "Waiting for Pod to be ready..."
 kubectl wait --for=condition=Ready pod/${POD_NAME} --timeout=120s
+
+# Additional wait to ensure container is fully initialized
+# This helps avoid issues where Pod is Ready but container network stack isn't ready
+echo "Waiting for container to be fully initialized..."
+sleep 3
 
 # Test access via PSC endpoint
 echo ""
@@ -125,6 +137,13 @@ echo ""
 TEMP_OUTPUT=$(mktemp)
 kubectl exec ${POD_NAME} -- curl -s -w "\nHTTP_CODE:%{http_code}\nTIME_TOTAL:%{time_total}\n" -m 10 http://${PSC_ENDPOINT_IP} > "$TEMP_OUTPUT" 2>&1
 TEST_RESULT=$?
+
+# If curl failed, show the error output for debugging
+if [ $TEST_RESULT -ne 0 ]; then
+  echo "⚠️  curl command failed. Error output:"
+  cat "$TEMP_OUTPUT"
+  echo ""
+fi
 
 # Extract response body and HTTP code
 HTTP_CODE=$(grep "^HTTP_CODE:" "$TEMP_OUTPUT" | cut -d: -f2 | tr -d '\r')
