@@ -144,7 +144,7 @@ echo ""
 echo "📋 Connection Information:"
 echo "  Source: GKE Pod (IP: ${POD_IP})"
 echo "  Destination: PSC Endpoint (IP: ${PSC_ENDPOINT_IP})"
-echo "  Target: AWS EC2 Instance (via VPN)"
+echo "  Target: Amazon EC2 Instance (via VPN)"
 echo ""
 
 # Display response details
@@ -177,7 +177,7 @@ if [ $TEST_RESULT -eq 0 ] && [ -n "$HTTP_CODE" ]; then
   echo "    ↓"
   echo "  VPN Gateway (GCP → AWS)"
   echo "    ↓"
-  echo "  AWS EC2 Instance ✅"
+  echo "  Amazon EC2 Instance ✅"
 else
   echo "❌ Connection Status: FAILED"
   echo ""
@@ -191,7 +191,7 @@ else
   echo ""
   echo "Check the following:"
   echo "1. Verify PSC endpoint status is 'Accepted'"
-  echo "2. Verify ILB backend (AWS EC2 instance) is running"
+  echo "2. Verify ILB backend (Amazon EC2 instance) is running"
   echo "3. Verify firewall rules are correctly configured"
   echo "4. Verify VPN connection is established"
 fi

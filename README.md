@@ -1,6 +1,6 @@
 # GCP GKE to AWS VPN via Private Service Connect
 
-This project demonstrates how to connect a GKE cluster in GCP to an AWS EC2 instance through a VPN connection using GCP's Private Service Connect (PSC) and Internal Load Balancer (ILB).
+This project demonstrates how to connect a GKE cluster in GCP to an Amazon EC2 instance through a VPN connection using GCP's Private Service Connect (PSC) and Internal Load Balancer (ILB).
 
 ## Architecture Overview
 
@@ -70,12 +70,35 @@ This project demonstrates how to connect a GKE cluster in GCP to an AWS EC2 inst
 
 ## Prerequisites
 
+### Required Tools
+
 - Terraform >= 1.14.0
 - AWS CLI configured with appropriate credentials
 - GCP CLI (`gcloud`) configured with appropriate credentials
 - kubectl installed
-- GCP Project ID
-- AWS Account with permissions to create VPC, EC2, VPN resources
+
+### Required Accounts and Permissions
+
+- **GCP Project ID** with the following APIs enabled:
+  - Compute Engine API
+  - Kubernetes Engine API
+  - Cloud Resource Manager API
+
+- **AWS Account** with permissions to create:
+  - VPC, Subnets, Internet Gateway, NAT Gateway
+  - EC2 instances, Security Groups, Route Tables
+  - VPN Gateway, Customer Gateway, VPN Connections
+  - IAM Roles and Instance Profiles
+
+### Enable GCP APIs
+
+Before running Terraform, enable the required GCP APIs:
+
+```bash
+gcloud services enable compute.googleapis.com
+gcloud services enable container.googleapis.com
+gcloud services enable cloudresourcemanager.googleapis.com
+```
 
 ## Setup
 
@@ -92,6 +115,16 @@ Edit `terraform.tfvars` and set your GCP project ID:
 
 ```hcl
 project_id = "your-gcp-project-id"
+```
+
+**Optional**: You can also override default values in `terraform.tfvars`:
+
+```hcl
+project_id = "your-gcp-project-id"
+environment  = "test"        # Optional: defaults to "test"
+project_name = "gke2vpn"     # Optional: defaults to "gke2vpn"
+aws_region   = "ap-northeast-1"  # Optional: defaults to "ap-northeast-1"
+gcp_region   = "asia-northeast1" # Optional: defaults to "asia-northeast1"
 ```
 
 **Note**: `terraform.tfvars` is already in `.gitignore` and will not be committed.
@@ -115,15 +148,28 @@ terraform plan
 terraform apply
 ```
 
-This will create:
-- AWS VPC, subnets, EC2 instance, and VPN gateway
-- GCP Consumer and Producer VPCs
-- GCP GKE cluster
-- GCP Internal Load Balancer
-- GCP Service Attachment and PSC Endpoint
-- VPN connection between AWS and GCP
+This will create the following resources:
 
-**Note**: VPN connection establishment may take 10-20 minutes.
+**AWS Resources:**
+- VPC with public and private subnets
+- Amazon EC2 instance in private subnet (t2.small, running HTTP server on port 80)
+- VPN Gateway and Customer Gateway
+- Route tables and security groups
+- IAM roles and instance profiles for EC2
+- SSH key pair (automatically generated)
+
+**GCP Resources:**
+- Consumer VPC (hosts GKE cluster and PSC endpoint)
+- Producer VPC (hosts ILB, Service Attachment, and VPN gateway)
+- GKE cluster with auto-scaling node pool
+- Internal Load Balancer (ILB)
+- Service Attachment and PSC Endpoint
+- VPN Gateway and External VPN Gateway
+
+**Note**: 
+- Resource creation typically takes 15-30 minutes
+- VPN connection establishment may take an additional 10-20 minutes after resource creation
+- Total setup time: approximately 25-50 minutes
 
 ### 5. Verify PSC Endpoint Status
 
@@ -142,8 +188,6 @@ gcloud compute forwarding-rules describe ${PSC_ENDPOINT_NAME} \
 
 ## Testing PSC Connectivity
 
-See [k8s/README.md](k8s/README.md) for detailed testing instructions.
-
 ### Quick Test
 
 Run the automated test script:
@@ -152,44 +196,111 @@ Run the automated test script:
 ./scripts/test-psc-connection.sh
 ```
 
+Or specify a custom Pod name:
+
+```bash
+./scripts/test-psc-connection.sh my-test-pod
+```
+
 This script will:
-1. Retrieve configuration from Terraform outputs
-2. Connect to the GKE cluster
-3. Create a test Pod
-4. Test HTTP connectivity to the AWS EC2 instance via PSC
-5. Automatically clean up the test Pod
+1. Retrieve configuration from Terraform outputs (project ID, cluster name, location, PSC endpoint IP)
+2. Connect to the GKE cluster using `gcloud container clusters get-credentials`
+3. Create a test Pod with a curl container
+4. Test HTTP connectivity to the Amazon EC2 instance via PSC endpoint
+5. Display detailed connection information including:
+   - **Connection Information**: Source Pod IP, destination PSC endpoint IP, and target Amazon EC2 instance
+   - **Response Details**: HTTP status code, response time, and response body
+   - **Connection Path**: Visual representation of the connection path from GKE Pod to Amazon EC2 instance
+6. Automatically clean up the test Pod
+
+### Expected Output
+
+When the connection is successful, you will see output similar to:
+
+```
+==========================================
+Connection Test Result
+==========================================
+
+📋 Connection Information:
+  Source: GKE Pod (IP: 10.0.100.23)
+  Destination: PSC Endpoint (IP: 10.0.20.2)
+  Target: Amazon EC2 Instance (via VPN)
+
+✅ Connection Status: SUCCESS
+
+📊 Response Details:
+  HTTP Status Code: 200
+  Response Time: 0.123s
+
+📝 Response Body:
+  ┌─────────────────────────────────────────────────────────┐
+  │ Hello World from test-gke2vpn-aws-private-vm-01         │
+  └─────────────────────────────────────────────────────────┘
+
+🔗 Connection Path:
+  GKE Pod (10.0.100.23)
+    ↓
+  PSC Endpoint (10.0.20.2)
+    ↓
+  Service Attachment
+    ↓
+  Internal Load Balancer (Producer VPC)
+    ↓
+  VPN Gateway (GCP → AWS)
+    ↓
+  Amazon EC2 Instance ✅
+```
+
+The script provides clear visual feedback about the connection status and helps troubleshoot any connectivity issues.
 
 ## Project Structure
 
 ```
 .
-├── terraform/           # Terraform configuration files
-│   ├── aws_*.tf        # AWS resources (VPC, EC2, VPN)
-│   ├── gcp_*.tf        # GCP resources (VPC, GKE, ILB, PSC, VPN)
-│   ├── locals.tf       # Local variables and configuration
-│   ├── variables.tf    # Input variables
-│   ├── outputs.tf      # Output values
-│   └── provider.tf     # Provider configurations
-├── scripts/            # Utility scripts
-│   └── test-psc-connection.sh  # PSC connectivity test script
-├── k8s/                 # Kubernetes-related documentation
-│   └── README.md       # PSC testing guide
-└── src/                 # Source code (optional)
-    └── curl-golang/     # Sample HTTP server (not used in main flow)
+├── terraform/                    # Terraform configuration files
+│   ├── aws_*.tf                 # AWS resources (VPC, EC2, VPN)
+│   ├── gcp_*.tf                 # GCP resources (VPC, GKE, ILB, PSC, VPN)
+│   ├── locals.tf                # Local variables and configuration
+│   ├── variables.tf             # Input variables
+│   ├── outputs.tf               # Output values
+│   ├── provider.tf              # Provider configurations
+│   ├── terraform.tf             # Terraform settings
+│   └── terraform.tfvars.example # Example variables file
+├── scripts/                      # Utility scripts
+│   └── test-psc-connection.sh   # PSC connectivity test script with detailed output
+├── misc/                         # Miscellaneous files
+│   └── *.key.pub                # EC2 SSH public keys (generated by Terraform)
+└── README.md                     # This file
 ```
+
+**Note**: The following files are ignored by Git (via `.gitignore`):
+- `terraform/terraform.tfvars` - Contains sensitive configuration (project ID, etc.)
+- `terraform/terraform.tfstate*` - Terraform state files
+- `misc/*.key` - Private SSH keys
 
 ## Configuration
 
 ### Default Settings
 
+The following default values are configured in `terraform/locals.tf`:
+
 - **Environment**: `test`
 - **Project Name**: `gke2vpn`
 - **AWS Region**: `ap-northeast-1`
 - **GCP Region**: `asia-northeast1`
+- **Amazon EC2 Instance Type**: `t2.small`
 - **GKE Machine Type**: `e2-medium`
 - **GKE Node Count**: 1-3 nodes (auto-scaling)
+- **AWS VPC CIDR**: `10.0.0.0/16`
+- **AWS Public Subnet**: `10.0.10.0/24`
+- **AWS Private Subnet**: `10.0.20.0/24`
+- **GKE Pod IP Range**: `10.0.100.0/24`
+- **GKE Service IP Range**: `10.0.200.0/24`
 
-These can be modified in `terraform/locals.tf`.
+**Note**: The GCP Consumer VPC intentionally uses overlapping CIDR ranges with AWS VPC to test VPN routing behavior. This is intentional for testing purposes.
+
+To modify these settings, edit `terraform/locals.tf` before running `terraform apply`.
 
 ## Outputs
 
@@ -220,7 +331,10 @@ Available outputs:
 1. Verify PSC endpoint status is "Accepted"
 2. Check ILB backend health
 3. Verify firewall rules allow traffic
-4. See [k8s/README.md](k8s/README.md) for detailed troubleshooting
+4. Check VPN connection is established between GCP and AWS
+5. Verify the test script shows detailed error information:
+   - If HTTP status code is not 200, check ILB backend and EC2 instance
+   - If curl command fails, verify network connectivity and firewall rules
 
 ### GKE Cluster Issues
 
@@ -237,15 +351,46 @@ cd terraform
 terraform destroy
 ```
 
-**Warning**: This will delete all resources created by Terraform, including VPCs, instances, and load balancers.
+**Warning**: This will delete all resources created by Terraform, including:
+- AWS VPC, subnets, EC2 instances, VPN gateways, and related resources
+- GCP VPCs, GKE clusters, load balancers, VPN gateways, and related resources
+
+**Note**: 
+- Ensure you have backups of any important data before destroying resources
+- The cleanup process may take 10-15 minutes
+- Some resources (like VPN connections) may take time to fully terminate
+
+## Cost Considerations
+
+This project creates resources that incur costs in both AWS and GCP:
+
+**AWS Costs:**
+- EC2 instance (t2.small): ~$0.02-0.03/hour
+- VPN Gateway: ~$0.05/hour
+- Data transfer: varies by usage
+- NAT Gateway (if used): ~$0.045/hour + data transfer
+
+**GCP Costs:**
+- GKE cluster: ~$0.10/hour (e2-medium nodes)
+- VPN Gateway: ~$0.05/hour
+- Load Balancer: ~$0.025/hour
+- Data transfer: varies by usage
+
+**Estimated Monthly Cost**: Approximately $50-100/month if left running continuously.
+
+**Recommendation**: Destroy resources when not in use to avoid unnecessary costs.
 
 ## Security Considerations
 
 - All sensitive values should be in `terraform.tfvars` (already in `.gitignore`)
 - VPN connections use encrypted tunnels
 - PSC provides private connectivity without exposing services to the internet
-- EC2 instance is in a private subnet
+- Amazon EC2 instance is in a private subnet (no public IP)
+- SSH keys for EC2 instances are automatically generated by Terraform
+  - Private keys are stored in `misc/` directory (ignored by Git)
+  - Public keys are stored in `misc/` directory and uploaded to AWS
 - Review and adjust security groups and firewall rules as needed
+- Ensure proper IAM permissions are configured for both AWS and GCP
 
 ## License
 
