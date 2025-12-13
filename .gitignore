@@ -15,6 +15,11 @@ terraform/.terraformrc
 terraform/terraform.rc
 terraform/.envrc
 
+# Terraform state files in root directory
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+
 # Misc directory - ignore all files except .gitkeep
 # Terraform generates SSH keys in this directory
 misc/*
